@@ -1,0 +1,31 @@
+[project]
+name = "auto_sane"
+dynamic = ["version"]
+description = "Application to automatically scan and process documents."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["python-sane"]
+
+[project.scripts]
+auto-sane = "auto_sane.__main__:main"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/auto_sane"]
+artifacts = ["*/py.typed"]
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/auto_sane/_version.py"
+
+[dependency-groups]
+dev = ["pre-commit", "pytest", "ruff", "ty"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: Tests that take longer than one second"]
