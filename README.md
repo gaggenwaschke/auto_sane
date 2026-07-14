@@ -7,11 +7,11 @@ The automatic scanning Tool
 For setting up this application in your python environment just run
 
 ```bash
-pip install git+<URL>
+pip install git+https://github.com/gaggenwaschke/auto_sane
 ```
 
 ```bash
-uv add git+<URL>
+uv add git+https://github.com/gaggenwaschke/auto_sane
 ```
 
 # Development
@@ -19,7 +19,7 @@ uv add git+<URL>
 For setting this up for development run
 
 ```bash
-git clone <URL>
+git clone https://github.com/gaggenwaschke/auto_sane
 cd auto_sane
 uv sync --all-extras  # installs all dependencies, including the development ones
 uv run pre-commit install  # installs all linters as pre commit hooks
