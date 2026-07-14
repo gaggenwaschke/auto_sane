@@ -73,7 +73,8 @@ class App(BaseSettings):
         while more_pages:
             page = device.snap(True)
             logger.debug("Scanned page #%d", page_index)
-            page.save(target_dir / f"{page_index}.png")
+
+            page.save(target_dir / f"{page_index}.png", compress_level=0)
             try:
                 device.start()
                 page_index += 1
