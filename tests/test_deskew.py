@@ -10,9 +10,13 @@ from auto_sane.transform import quad_to_rect
 QuadPoints: TypeAlias = np.ndarray
 
 
-def deskew_opencv_minarea(image) -> QuadPoints:
+def edge_detection(image) -> np.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 50, 150)
+    return cv2.Canny(gray, 40000, 60000, apertureSize=7)
+
+
+def deskew_minarea_on_edge_detection(image) -> QuadPoints:
+    edges = edge_detection(image)
 
     y_indices, x_indices = np.where(edges > 0)
     coords = np.column_stack((x_indices, y_indices))
@@ -38,9 +42,8 @@ def deskew_opencv_minarea(image) -> QuadPoints:
     return np.array([tl, tr, br, bl], dtype=np.float32)
 
 
-def deskew_opencv_minarea_refined(image) -> QuadPoints:
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 50, 150)
+def deskew_minarea_on_edge_detection_refined(image) -> QuadPoints:
+    edges = edge_detection(image)
 
     y_indices, x_indices = np.where(edges > 0)
     coords = np.column_stack((x_indices, y_indices))
@@ -151,8 +154,8 @@ def deskew_floodfill_crop(image) -> QuadPoints:
 
 
 implementations = {
-    "opencv_minarea": deskew_opencv_minarea,
-    "opencv_minarea_refined": deskew_opencv_minarea_refined,
+    "minarea_on_edge_detection": deskew_minarea_on_edge_detection,
+    "minarea_on_edge_detection_refined": deskew_minarea_on_edge_detection_refined,
     "floodfill_crop": deskew_floodfill_crop,
 }
 
