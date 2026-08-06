@@ -15,6 +15,36 @@ def edge_detection(image) -> np.ndarray:
     return cv2.Canny(gray, 40000, 60000, apertureSize=7)
 
 
+def deskew_minarea_on_diff_quantile(image: np.ndarray) -> QuadPoints:
+    diff = np.diff(image).sum(axis=2)
+
+    threshold = np.quantile(diff, 0.99)
+    binary_image = diff > threshold
+    cv2.imwrite("tests/outputs/binary.png", binary_image * 255)
+    y_indices, x_indices = np.where(diff > 0)
+    coords = np.column_stack((x_indices, y_indices))
+
+    if len(coords) == 0:
+        # Returning image corners as a fallback to keep type consistent,
+        # although normally we'd handle this upstream or via Optional
+        h, w = image.shape[:2]
+        return np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32)
+
+    rect = cv2.minAreaRect(coords)
+    box = cv2.boxPoints(rect).astype(np.float32)
+
+    pts = box
+    s = pts.sum(axis=1)
+    diff = np.diff(pts, axis=1)
+
+    tl = pts[np.argmin(s)]
+    br = pts[np.argmax(s)]
+    tr = pts[np.argmin(diff)]
+    bl = pts[np.argmax(diff)]
+
+    return np.array([tl, tr, br, bl], dtype=np.float32)
+
+
 def deskew_minarea_on_edge_detection(image) -> QuadPoints:
     edges = edge_detection(image)
 
@@ -157,6 +187,7 @@ implementations = {
     "minarea_on_edge_detection": deskew_minarea_on_edge_detection,
     "minarea_on_edge_detection_refined": deskew_minarea_on_edge_detection_refined,
     "floodfill_crop": deskew_floodfill_crop,
+    "deskew_minarea_on_diff_quantile": deskew_minarea_on_diff_quantile,
 }
 
 DATA_DIR = Path("./tests/data")
