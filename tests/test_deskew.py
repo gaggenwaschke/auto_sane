@@ -7,7 +7,22 @@ import pytest
 
 from auto_sane.transform import quad_to_rect
 
+DATA_DIR = Path("./tests/data")
+OUTPUT_DIR = Path("./tests/outputs")
+
 QuadPoints: TypeAlias = np.ndarray
+
+
+def intersect(l1, l2):
+    # L1: p1 + t*v1 | L2: p2 + s*v2
+    p1, v1 = l1
+    p2, v2 = l2
+    cross = v1[0] * v2[1] - v1[1] * v2[0]
+    if abs(cross) < 1e-6:
+        return None
+    dp = p2 - p1
+    t = (dp[0] * v2[1] - dp[1] * v2[0]) / cross
+    return p1 + t * v1
 
 
 def edge_detection(image) -> np.ndarray:
@@ -142,6 +157,72 @@ def deskew_minarea_on_edge_detection_refined(image) -> QuadPoints:
     return np.array([tl, tr, br, bl], dtype=np.float32)
 
 
+def deskew_hough(image: cv2.Mat) -> QuadPoints:
+    edges = edge_detection(image)
+
+    lines = cv2.HoughLinesP(
+        edges, 3, np.pi / 180, threshold=300, minLineLength=500, maxLineGap=1000
+    )
+    if lines is None:
+        h, w = image.shape[:2]
+        return np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32)
+
+    horiz_candidates = []
+    vert_candidates = []
+    line_image = image.copy()
+    for line in lines:
+        x1, y1, x2, y2 = line[0]
+        line_image = cv2.line(line_image, (x1, y1), (x2, y2), (0, 0, 255), 3)
+        angle = np.abs(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
+        if angle < 30 or angle > 150:
+            horiz_candidates.append(line[0])
+        elif 60 < angle < 120:
+            vert_candidates.append(line[0])
+    cv2.imwrite(str(OUTPUT_DIR / "line_image.png"), line_image)
+
+    if not horiz_candidates or not vert_candidates:
+        h, w = image.shape[:2]
+        return np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32)
+
+    avg_y = np.mean([(line[1] + line[3]) / 2 for line in horiz_candidates])
+    top_lines = [line for line in horiz_candidates if (line[1] + line[3]) / 2 < avg_y]
+    bottom_lines = [
+        line for line in horiz_candidates if (line[1] + line[3]) / 2 >= avg_y
+    ]
+    avg_x = np.mean([(line[0] + line[2]) / 2 for line in vert_candidates])
+    left_lines = [line for line in vert_candidates if (line[0] + line[2]) / 2 < avg_x]
+    right_lines = [line for line in vert_candidates if (line[0] + line[2]) / 2 >= avg_x]
+
+    final_bundles = {
+        "top": top_lines,
+        "bottom": bottom_lines,
+        "left": left_lines,
+        "right": right_lines,
+    }
+    fitted_lines = {}
+    for key, segments in final_bundles.items():
+        if not segments:
+            h, w = image.shape[:2]
+            return np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32)
+        pts = []
+        for s in segments:
+            pts.extend([[s[0], s[1]], [s[2], s[3]]])
+        pts = np.array(pts, dtype=np.float32)
+        line_params = cv2.fitLine(pts, cv2.DIST_L2, 0, 0.01, 0.01)
+        fitted_lines[key] = (line_params[2:].flatten(), line_params[:2].flatten())
+
+    tl = intersect(fitted_lines["top"], fitted_lines["left"])
+    tr = intersect(fitted_lines["top"], fitted_lines["right"])
+    br = intersect(fitted_lines["bottom"], fitted_lines["right"])
+    bl = intersect(fitted_lines["bottom"], fitted_lines["left"])
+
+    if any(x is None for x in [tl, tr, br, bl]):
+        h, w = image.shape[:2]
+        return np.array([[0, 0], [w, 0], [w, h], [0, h]], dtype=np.float32)
+
+    return np.array([tl, tr, br, bl], dtype=np.float32)
+
+
 def deskew_floodfill_crop(image) -> QuadPoints:
     h, w = image.shape[:2]
 
@@ -187,11 +268,9 @@ implementations = {
     "minarea_on_edge_detection": deskew_minarea_on_edge_detection,
     "minarea_on_edge_detection_refined": deskew_minarea_on_edge_detection_refined,
     "floodfill_crop": deskew_floodfill_crop,
+    "hough": deskew_hough,
     "deskew_minarea_on_diff_quantile": deskew_minarea_on_diff_quantile,
 }
-
-DATA_DIR = Path("./tests/data")
-OUTPUT_DIR = Path("./tests/outputs")
 
 
 @pytest.mark.parametrize("img_path", [f for f in DATA_DIR.glob("*.png")])
