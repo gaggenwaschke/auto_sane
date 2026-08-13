@@ -33,3 +33,9 @@ class Config(BaseSettings):
     canny_apperature: int = Field(
         default=7, description="Canny edge detection aperature"
     )
+    pdf_quality: int = Field(
+        default=10,
+        ge=0,
+        le=100,
+        description="Quality of the images exported to PDF [0..100]",
+    )
