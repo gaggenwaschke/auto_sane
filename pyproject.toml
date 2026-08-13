@@ -5,7 +5,8 @@ description = "Application to automatically scan and process documents."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "ocrmypdf",
+    "numpy",
+    "opencv-python",
     "pillow",
     "pydantic",
     "pydantic-settings",
@@ -34,8 +35,6 @@ version-file = "src/auto_sane/_version.py"
 [dependency-groups]
 dev = [
     "matplotlib",
-    "numpy",
-    "opencv-python",
     "pre-commit",
     "pyqt6",
     "pytest",

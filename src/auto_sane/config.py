@@ -24,3 +24,12 @@ class Config(BaseSettings):
     target_dir: Path = Field(
         default=Path("./scans"), description="Target directory to save the scans to."
     )
+    canny_lower: int = Field(
+        default=40000, description="Canny edge detection lower limit"
+    )
+    canny_upper: int = Field(
+        default=60000, description="Canny edge detection upper limit"
+    )
+    canny_apperature: int = Field(
+        default=7, description="Canny edge detection aperature"
+    )
