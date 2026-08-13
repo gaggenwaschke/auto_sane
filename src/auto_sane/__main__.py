@@ -1,17 +1,24 @@
 import asyncio
 import logging
 import re
+import warnings
+from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, CliApp
+from pypdf import PdfWriter
 from sane import SaneDev
 
 from auto_sane.sane_wrapper import AvailableDevice, Sane, initialize
 
 PageMode = Literal["ADF", "Duplex"]
+
+ScannerOutput = Path
+ScannerToPdfQueue = asyncio.Queue[ScannerOutput]
 
 
 class NoDeviceFoundError(RuntimeError):
@@ -25,6 +32,10 @@ class TooManyMatchingDevicesError(RuntimeError):
 
 
 class NoDocumentsInFeedError(RuntimeError):
+    pass
+
+
+class DeveloperWarning(RuntimeWarning):
     pass
 
 
@@ -50,6 +61,18 @@ class App(BaseSettings):
 
     async def cli_cmd(self):
         logging.basicConfig(level=logging.DEBUG)
+
+        scanner_to_pdf_queue = ScannerToPdfQueue(16)
+        with TemporaryDirectory() as scanned_docs_dir:
+            async with asyncio.TaskGroup() as tasks:
+                tasks.create_task(
+                    self._scanner_job(scanner_to_pdf_queue, Path(scanned_docs_dir))
+                )
+                tasks.create_task(self._pdf_merger_job(scanner_to_pdf_queue))
+
+    async def _scanner_job(
+        self, queue: ScannerToPdfQueue, single_pages_dir: Path
+    ) -> None:
         with initialize() as sane:
             logger.info("Initialized Sane. Will search for devices now.")
             available_device = await self._wait_for_device(sane)
@@ -59,32 +82,60 @@ class App(BaseSettings):
                 self._configure_device(device)
 
                 while True:
-                    await self._process_document(device)
+                    pages_dir = await self._scan_document(device, single_pages_dir)
+                    try:
+                        queue.put_nowait(pages_dir)
+                    except asyncio.QueueFull:
+                        msg = "Scanner to pdf queue full, will block on back pressure. PDF merging too slow!"
+                        logger.warning(msg)
+                        warnings.warn(msg, category=DeveloperWarning)
+                        await queue.put(pages_dir)
 
-    async def _process_document(self, device: SaneDev) -> None:
+    async def _pdf_merger_job(self, queue: ScannerToPdfQueue) -> None:
+        self.target_dir.mkdir(parents=True, exist_ok=True)
+        while True:
+            single_pages_dir = await queue.get()
+            document_name = f"{single_pages_dir.stem}.pdf"
+            target_file = self.target_dir / str(document_name)
+
+            logger.debug('Writing doc to disc "%s"', target_file)
+            with closing(PdfWriter()) as writer:
+                for file in single_pages_dir.iterdir():
+                    writer.merge(position=None, fileobj=file)
+                writer.write(target_file)
+            logger.debug('Finished writing "%s" to disk.', target_file)
+
+    async def _scan_document(
+        self, device: SaneDev, single_pages_dir: Path
+    ) -> ScannerOutput:
+        """Will scan all current pages in feeder into one document."""
         logger.info("Please feed new document!")
         await self._start_when_first_doc_in_feeder(device)
-        document_name = datetime.now(UTC).isoformat()
-        logger.info("Starting to process new document #%s", document_name)
-        target_dir = self.target_dir / str(document_name)
+        document_dir_name = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+        logger.info('Starting to process new document "%s"', document_dir_name)
+        target_dir = single_pages_dir / document_dir_name
         target_dir.mkdir(parents=True, exist_ok=False)
         more_pages = True
         page_index = 0
-        while more_pages:
-            page = device.snap(True)
-            logger.debug("Scanned page #%d", page_index)
+        try:
+            while more_pages:
+                page = device.snap(True)
+                logger.debug("Scanned page #%d", page_index)
 
-            page.save(target_dir / f"{page_index}.png", compress_level=0)
-            try:
-                device.start()
-                page_index += 1
-            except Exception as e:
-                if str(e) == "Document feeder out of documents":
-                    more_pages = False
-                else:
-                    raise
-        device.cancel()
-        logger.debug('Finished "%s"', document_name)
+                page.save(target_dir / f"{page_index}.pdf", compress_level=0)
+                try:
+                    device.start()
+                    page_index += 1
+                except Exception as e:
+                    if str(e) == "Document feeder out of documents":
+                        more_pages = False
+                    else:
+                        raise
+        finally:
+            device.cancel()
+
+        logger.debug('Finished scanning "%s"', document_dir_name)
+        return target_dir.resolve()
 
     async def _start_when_first_doc_in_feeder(self, device: SaneDev):
         paper_in_feed = False
@@ -145,13 +196,6 @@ class App(BaseSettings):
         device.mode = "Color"
         device.resolution = self.dpi
         device.source = self.page_mode
-
-
-def _forever_index():
-    index = 0
-    while True:
-        yield index
-        index += 1
 
 
 def main():

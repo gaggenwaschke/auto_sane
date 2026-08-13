@@ -32,6 +32,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pymupdf" },
+    { name = "pypdf" },
     { name = "python-sane" },
 ]
 
@@ -56,6 +57,7 @@ requires-dist = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pymupdf" },
+    { name = "pypdf" },
     { name = "python-sane" },
 ]
 
@@ -1073,6 +1075,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f3/91/9c6ee907786a473bf81c5f53cf703ba0957b23ab84c264080fb5a450416f/pyparsing-3.3.2.tar.gz", hash = "sha256:c777f4d763f140633dcb6d8a3eda953bf7a214dc4eff598413c070bcdc117cbc", size = 6851574, upload-time = "2026-01-21T03:57:59.36Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl", hash = "sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d", size = 122781, upload-time = "2026-01-21T03:57:55.912Z" },
+]
+
+[[package]]
+name = "pypdf"
+version = "6.16.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1a/7f/5bc369dedae6750e23fc9ce82f6396258f92ed80ae0137732738a6d4ffce/pypdf-6.16.0.tar.gz", hash = "sha256:dfc5b0afeb5e02e9ee1dce71c09071f062d1a4030d2925f03a5daee0ee975ed8", size = 7002332, upload-time = "2026-08-13T14:54:41.586Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/bb/83/2b04a77f8de3c6d295e2687228b21152cb65a406511373ed06fd757634af/pypdf-6.16.0-py3-none-any.whl", hash = "sha256:8c47581faa1cba7006ac269da30075c929c251cc4ffbafb2bcbe260306631118", size = 382160, upload-time = "2026-08-13T14:54:39.734Z" },
 ]
 
 [[package]]
