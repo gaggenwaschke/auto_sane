@@ -2,18 +2,17 @@ import asyncio
 import logging
 import re
 import warnings
-from datetime import UTC, datetime
-from pathlib import Path
+from collections.abc import AsyncIterator
 
+from PIL.Image import Image
 from sane import SaneDev
 
 from auto_sane.config import Config
 from auto_sane.sane_wrapper import AvailableDevice, Sane, initialize
 from auto_sane.types import (
     DeveloperWarning,
+    ImageListQueue,
     NoDeviceFoundError,
-    ScannerOutput,
-    ScannerToPdfQueue,
     TooManyMatchingDevicesError,
 )
 
@@ -21,12 +20,9 @@ logger = logging.getLogger(__name__)
 
 
 class Scanner:
-    def __init__(
-        self, config: Config, queue: ScannerToPdfQueue, single_pages_dir: Path
-    ):
+    def __init__(self, config: Config, queue: ImageListQueue):
         self._config = config
         self._queue = queue
-        self._single_pages_dir = single_pages_dir
 
     async def run(self) -> None:
         with initialize() as sane:
@@ -38,31 +34,28 @@ class Scanner:
                 self._configure_device(device)
 
                 while True:
-                    pages_dir = await self._scan_document(device)
+                    pages = [page async for page in self._scan_document(device)]
                     try:
-                        self._queue.put_nowait(pages_dir)
+                        self._queue.put_nowait(pages)
                     except asyncio.QueueFull:
                         msg = "Scanner to pdf queue full, will block on back pressure. PDF merging too slow!"
                         logger.warning(msg)
                         warnings.warn(msg, category=DeveloperWarning)
-                        await self._queue.put(pages_dir)
+                        await self._queue.put(pages)
 
-    async def _scan_document(self, device: SaneDev) -> ScannerOutput:
+    async def _scan_document(self, device: SaneDev) -> AsyncIterator[Image]:
         """Will scan all current pages in feeder into one document."""
         logger.info("Please feed new document!")
         await self._start_when_first_doc_in_feeder(device)
-        document_dir_name = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
-        logger.info('Starting to process new document "%s"', document_dir_name)
-        target_dir = self._single_pages_dir / document_dir_name
-        target_dir.mkdir(parents=True, exist_ok=False)
+        logger.info("Starting to process new document")
         more_pages = True
         page_index = 0
+
         try:
             while more_pages:
-                page = device.snap(True)
+                yield device.snap(True)
                 logger.debug("Scanned page #%d", page_index)
 
-                page.save(target_dir / f"{page_index}.pdf", compress_level=0)
                 try:
                     device.start()
                     page_index += 1
@@ -74,8 +67,7 @@ class Scanner:
         finally:
             device.cancel()
 
-        logger.debug('Finished scanning "%s"', document_dir_name)
-        return target_dir.resolve()
+        logger.debug("Finished scanning document")
 
     async def _start_when_first_doc_in_feeder(self, device: SaneDev):
         paper_in_feed = False

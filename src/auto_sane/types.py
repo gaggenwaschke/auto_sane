@@ -1,10 +1,13 @@
 import asyncio
 from pathlib import Path
 
+from PIL.Image import Image
+
 from auto_sane.sane_wrapper import AvailableDevice
 
-ScannerOutput = Path
-ScannerToPdfQueue = asyncio.Queue[ScannerOutput]
+type ImageList = list[Image]
+ImageListQueue = asyncio.Queue[ImageList]
+DirectoryQueue = asyncio.Queue[Path]
 
 
 class NoDeviceFoundError(RuntimeError):

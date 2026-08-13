@@ -4,13 +4,13 @@ from contextlib import closing
 from pypdf import PdfWriter
 
 from auto_sane.config import Config
-from auto_sane.types import ScannerToPdfQueue
+from auto_sane.types import DirectoryQueue
 
 logger = logging.getLogger(__name__)
 
 
 class PdfMerger:
-    def __init__(self, config: Config, input_queue: ScannerToPdfQueue):
+    def __init__(self, config: Config, input_queue: DirectoryQueue):
         self._config = config
         self._queue = input_queue
 
